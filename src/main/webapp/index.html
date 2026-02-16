@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplicación de Contactos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .form-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input[type="text"], input[type="email"], input[type="tel"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button.delete {
+            background-color: #dc3545;
+        }
+        
+        button.delete:hover {
+            background-color: #c82333;
+        }
+        
+        .contacts-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+        
+        .error {
+            color: red;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Aplicación de Contactos</h1>
+    
+    <div class="form-container">
+        <h2>Agregar Nuevo Contacto</h2>
+        <form id="contactForm">
+            <input type="hidden" id="contactId">
+            <div class="form-group">
+                <label for="name">Nombre:</label>
+                <input type="text" id="name" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Teléfono:</label>
+                <input type="tel" id="phone">
+            </div>
+            <button type="submit">Guardar Contacto</button>
+            <button type="button" id="cancelBtn" style="display:none;">Cancelar</button>
+        </form>
+    </div>
+    
+    <div class="contacts-container">
+        <h2>Lista de Contactos</h2>
+        <div id="loading" class="loading">Cargando contactos...</div>
+        <div id="error" class="error" style="display:none;"></div>
+        <table id="contactsTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Teléfono</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="contactsList">
+                <!-- Los contactos se cargarán aquí dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // URL base de la API
+        const API_BASE_URL = '/api/contacts';
+        
+        // Elementos del DOM
+        const contactForm = document.getElementById('contactForm');
+        const contactIdInput = document.getElementById('contactId');
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
+        const phoneInput = document.getElementById('phone');
+        const contactsList = document.getElementById('contactsList');
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const cancelBtn = document.getElementById('cancelBtn');
+        
+        // Bandera para indicar si estamos editando
+        let isEditing = false;
+        
+        // Función para cargar todos los contactos
+        async function loadContacts() {
+            try {
+                loadingDiv.style.display = 'block';
+                errorDiv.style.display = 'none';
+                
+                const response = await fetch(API_BASE_URL);
+                if (!response.ok) {
+                    throw new Error(`Error al cargar contactos: ${response.status}`);
+                }
+                
+                const contacts = await response.json();
+                renderContacts(contacts);
+            } catch (error) {
+                console.error('Error:', error);
+                errorDiv.textContent = `Error al cargar contactos: ${error.message}`;
+                errorDiv.style.display = 'block';
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        }
+        
+        // Función para renderizar contactos en la tabla
+        function renderContacts(contacts) {
+            contactsList.innerHTML = '';
+            
+            contacts.forEach(contact => {
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${contact.id}</td>
+                    <td>${contact.name}</td>
+                    <td>${contact.email}</td>
+                    <td>${contact.phone}</td>
+                    <td>
+                        <button onclick="editContact(${contact.id})">Editar</button>
+                        <button class="delete" onclick="deleteContact(${contact.id})">Eliminar</button>
+                    </td>
+                `;
+                
+                contactsList.appendChild(row);
+            });
+        }
+        
+        // Función para crear o actualizar un contacto
+        async function saveContact(event) {
+            event.preventDefault();
+            
+            const contactData = {
+                name: nameInput.value,
+                email: emailInput.value,
+                phone: phoneInput.value
+            };
+            
+            try {
+                let response;
+                if (isEditing) {
+                    // Actualizar contacto existente
+                    response = await fetch(`${API_BASE_URL}/${contactIdInput.value}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(contactData)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Error al actualizar contacto: ${response.status}`);
+                    }
+                    
+                    alert('Contacto actualizado correctamente');
+                } else {
+                    // Crear nuevo contacto
+                    response = await fetch(API_BASE_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(contactData)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Error al crear contacto: ${response.status}`);
+                    }
+                    
+                    alert('Contacto creado correctamente');
+                }
+                
+                // Limpiar formulario y recargar contactos
+                resetForm();
+                loadContacts();
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Función para editar un contacto
+        async function editContact(id) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/${id}`);
+                if (!response.ok) {
+                    throw new Error(`Error al obtener contacto: ${response.status}`);
+                }
+                
+                const contact = await response.json();
+                
+                // Rellenar el formulario con los datos del contacto
+                contactIdInput.value = contact.id;
+                nameInput.value = contact.name;
+                emailInput.value = contact.email;
+                phoneInput.value = contact.phone;
+                
+                // Cambiar a modo edición
+                isEditing = true;
+                document.querySelector('#contactForm button[type="submit"]').textContent = 'Actualizar Contacto';
+                cancelBtn.style.display = 'inline-block';
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Función para eliminar un contacto
+        async function deleteContact(id) {
+            if (!confirm('¿Estás seguro de que deseas eliminar este contacto?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error al eliminar contacto: ${response.status}`);
+                }
+                
+                alert('Contacto eliminado correctamente');
+                loadContacts();
+            } catch (error) {
+                console.error('Error:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Función para cancelar la edición
+        function cancelEdit() {
+            resetForm();
+        }
+        
+        // Función para reiniciar el formulario
+        function resetForm() {
+            contactForm.reset();
+            contactIdInput.value = '';
+            isEditing = false;
+            document.querySelector('#contactForm button[type="submit"]').textContent = 'Guardar Contacto';
+            cancelBtn.style.display = 'none';
+        }
+        
+        // Event listeners
+        contactForm.addEventListener('submit', saveContact);
+        cancelBtn.addEventListener('click', cancelEdit);
+        
+        // Cargar contactos al cargar la página
+        document.addEventListener('DOMContentLoaded', loadContacts);
+    </script>
+</body>
+</html>
